@@ -70,7 +70,6 @@ The `immich_ml_balancer` is a lightweight Nginx-based Docker image designed to d
 To build the Docker image for the balancer, navigate to the `immich_ml_balancer` directory (where this README is located) and run the following command:
 
 ```bash
-cd /path/to/your/immich_ml_balancer # Replace with the actual path
 docker build --platform linux/amd64 -t apetersson/immich_ml_balancer:latest .
 ```
 
@@ -110,6 +109,10 @@ services:
       # If port is omitted, it defaults to 3003.
       IMML_BACKENDS: "immich-machine-learning,192.168.0.123:3003,desktop.local:3003" # Example with local and a
       # No ports mapping needed here, as it's accessed via the internal network by immich server on port 80
+      #expose avahi for name resolution on your lan:
+    volumes:
+      - /var/run/dbus:/var/run/dbus               # DBus system bus
+      - /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket
     depends_on:
       - immich-machine-learning # Depend on at least one ML instance for startup order
     restart: always
@@ -157,10 +160,10 @@ This variable is a comma-separated string of your `immich_ml` backend instances.
 
 **Examples:**
 
-*   `IMML_BACKENDS: "my-local-ml,192.168.1.100:8000,another-server.lan"`
+*   `IMML_BACKENDS: "my-local-ml,192.168.1.100:8000,another-server.local"`
     *   `my-local-ml` will be accessed on port `3003`.
     *   `192.168.1.100` will be accessed on port `8000`.
-    *   `another-server.lan` will be accessed on port `3003`.
+    *   `another-server.local` will be accessed on port `3003`.
 
 ### Handling Sporadic Instances
 

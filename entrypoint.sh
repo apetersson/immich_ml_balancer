@@ -1,35 +1,62 @@
 #!/bin/sh
+set -e
 
-# Generate the Nginx upstream configuration dynamically
-echo "upstream immich_ml_backends {" > /etc/nginx/conf.d/immich_ml_backends.conf
-echo "    least_conn;" >> /etc/nginx/conf.d/immich_ml_backends.conf # Add least_conn here
+CONF=/etc/nginx/conf.d/immich_ml_backends.conf
 
-# Save original IFS
-OLDIFS=$IFS
-# Set IFS to comma for splitting
-IFS=','
+generate_conf() {
+  {
+    echo "upstream immich_ml_backends {"
+    echo "    zone immich_ml_backends 64k;"
+    echo "    least_conn;"
+    IFS=','
 
-# Iterate over the IMML_BACKENDS string, which will be split by IFS
-for i in $IMML_BACKENDS; do
-    # Remove leading/trailing whitespace from 'i' if any
-    i=$(echo "$i" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    for raw in $IMML_BACKENDS; do
+      backend="$(echo "$raw" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+      host="$(echo "$backend" | cut -d':' -f1)"
+      port="$(echo "$backend" | cut -d':' -s -f2)"
+      [ -z "$port" ] && port=3003
 
-    # Split each address by colon to check for a custom port
-    HOST=$(echo "$i" | cut -d':' -f1)
-    PORT=$(echo "$i" | cut -d':' -s -f2)
+      # literal IP?
+      if printf '%s\n' "$host" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+        echo "    server $host:$port;"
+        continue
+      fi
 
-    # If no port is specified, use the default 3003
-    if [ -z "$PORT" ]; then
-        PORT="3003"
-    fi
+      # DNS first
+      ip="$(getent hosts "$host" | awk '{print $1; exit}' || true)"
 
-    echo "    server $HOST:$PORT;" >> /etc/nginx/conf.d/immich_ml_backends.conf
-done
+      # Fallback to host Avahi via socket
+      [ -z "$ip" ] && ip="$(avahi-resolve-host-name -4 "$host" 2>/dev/null | awk '{print $2}' || true)"
 
-# Restore original IFS
-IFS=$OLDIFS
+      if [ -n "$ip" ]; then
+        echo "    server $ip:$port; # $host"
+      else
+        # Leave hostname for Nginx resolver (works for DNS names)
+        echo "    server $host:$port resolve;"
+      fi
+    done
 
-echo "}" >> /etc/nginx/conf.d/immich_ml_backends.conf
+    echo "}"
+  }
+}
 
-# Start Nginx
-exec nginx -g "daemon off;"
+# initial start
+generate_conf > "$CONF"
+nginx -g "daemon off;" &
+NGINX_PID=$!
+
+# watch every 60 s
+while true; do
+  sleep 60
+  TMP=$(mktemp)
+  generate_conf > "$TMP"
+  if ! cmp -s "$TMP" "$CONF"; then
+    mv "$TMP" "$CONF"
+    nginx -s reload
+    echo "[$(date)] upstream list changed – nginx reloaded"
+  else
+    rm "$TMP"
+  fi
+done &
+
+wait $NGINX_PID
