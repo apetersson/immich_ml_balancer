@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  immich-server:
+    container_name: immich_server
+    image: ghcr.io/immich-app/immich-server:release
+    volumes:
+      - ${THUMB_LOCATION}:/usr/src/app/upload/thumbs
+      - ${UPLOAD_LOCATION}:/usr/src/app/upload
+      - ${EXTERNAL_PATH}:/usr/src/app/external:ro
+    env_file:
+      - .env
+    # The server now connects to the balancer
+    ports:
+      - 2283:2283
+    devices:
+      - /dev/dri:/dev/dri            # Quick Sync / VA-API
+    depends_on:
+      - redis
+      - database
+      - immich-ml-balancer # Depend on the balancer
+    restart: always
+    networks:
+      - immich_network # Ensure it's on the shared network
+
+  immich-ml-balancer:
+    container_name: immich_ml_balancer
+    image: apetersson/immich_ml_balancer:latest # Your custom balancer image
+    environment:
+      # Comma-separated list of immich_ml instance hostnames/IPs
+      # 'immich-machine-learning-local' is the service name for the local ML instance
+      # 'polarbear.local' is the external host
+      IMML_BACKENDS: "immich-machine-learning:3003,polarbear.local:3003"
+    ports:
+      - 3003:80
+    networks:
+      - immich_network
+    depends_on:
+      - immich-machine-learning-local # Depend on the local ML instance for startup order
+    restart: always
+
+  immich-machine-learning-local: # Renamed to be a backend for the balancer
+    container_name: immich_machine_learning_local # Optional: give it a name
+    image: ghcr.io/immich-app/immich-machine-learning:release-openvino
+    volumes:
+      - ${MODEL_CACHE_LOCATION}:/cache
+    devices:
+      - /dev/dri:/dev/dri            # i915 render node
+    device_cgroup_rules:             # allow the OpenVINO EP to mmap GPU buffers
+      - 'c 189:* rmw'
+    env_file:
+      - .env
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 9G
+    networks:
+      - immich_network # Ensure it's on the shared network
+    # No ports mapping needed here, as it's accessed via the internal network by the balancer
+
+  redis:
+    container_name: immich_redis
+    image: redis:6.2
+    restart: always
+    networks:
+      - immich_network
+
+  database:
+    container_name: immich_postgres
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.3.0-pgvectors0.2.0
+    env_file:
+      - .env
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_DB: ${DB_DATABASE_NAME}
+      PG_DATA: /var/lib/postgresql/data
+    volumes:
+      - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - immich_network
+
+  backup:
+    container_name: immich_db_dumper
+    image: prodrigestivill/postgres-backup-local@sha256:483fa15ecd998302bd312fc380cb1b3683a940881d9099d6dfe65bcc1e2714e8
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: database
+      POSTGRES_DB: ${DB_DATABASE_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      SCHEDULE: "@daily"
+      BACKUP_NUM_KEEP: 3
+      BACKUP_DIR: /db_dumps
+    volumes:
+      - ${BACKUPS_LOCATION}:/db_dumps
+    depends_on:
+      - database
+    networks:
+      - immich_network
+
+networks:
+  immich_network:
+    driver: bridge
+
+volumes:
+  immich_ml_cache_local: # New volume for the local ML instance
+  immich_ml_cache_polarbear: # Optional: if polarbear.local also uses a Docker volume
+  # Original volumes from your file
+  pgdata:
+  model-cache: # This was commented out, but if used, ensure it's defined
