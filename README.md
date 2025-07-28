@@ -65,7 +65,7 @@ This section explains how to integrate your natively running Mac ML instance (or
 
 The `immich_ml_balancer` is a lightweight Nginx-based Docker image designed to distribute ML inference requests across multiple `immich_ml` service instances. It supports dynamic backend configuration and gracefully handles instances that might be sporadically available.
 
-### Building the Balancer Docker Image
+### (Optional) Building the Balancer Docker Image
 
 To build the Docker image for the balancer, navigate to the `immich_ml_balancer` directory (where this README is located) and run the following command:
 
@@ -75,7 +75,7 @@ docker build --platform linux/amd64 -t apetersson/immich_ml_balancer:latest .
 
 Replace `apetersson` with your Docker Hub username if you plan to push it.
 
-### Pushing to Docker Hub
+### (Optional) Pushing to Docker Hub
 
 After building, you can push the image to your Docker Hub repository to make it publicly available:
 
