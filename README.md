@@ -58,7 +58,7 @@ leveraging the Neural Engine on Apple Silicon Macs for faster ML inference.
    curl -s http://192.168.0.<mac-ip>:3003/ping    # → pong
    ```
 
-That’s it—your M2’s Neural Engine now handles all Immich ML tasks at full speed.
+That’s it—your M1’s M2’s M3’s... Neural Engine now handles all Immich ML tasks at full speed.
 
 ## 2. How to Enable this Instance as Part of a Load Balancer Setup
 
