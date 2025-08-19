@@ -24,8 +24,8 @@ leveraging the Neural Engine on Apple Silicon Macs for faster ML inference.
    cd immich/machine-learning
    ```
 
-3. **(Optional) Force Core ML to be Tried First**
-   Edit `app/models/constants.py` and move `"CoreMLExecutionProvider"` to the top of `SUPPORTED_PROVIDERS`.
+3. **Force Core ML to be Tried First**
+   Edit `immich_ml/models/constants.py` and move `"CoreMLExecutionProvider"` to the top of `SUPPORTED_PROVIDERS`.
 
 4. **Clean Virtual Environment with Only Runtime Dependencies**
 
